@@ -10,7 +10,7 @@ import warnings
 # Imports configuration
 from config_api import *
 from history_manager import load_search_history, add_to_history
-#from authentification import *
+from authentification import *
 
 # Imports logique métier
 from llm_gemini import LLMProvider
@@ -423,3 +423,4 @@ def display_review_generation(selected_papers, review_generator):
 
 if __name__ == "__main__":
     main()
+
