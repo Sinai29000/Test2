@@ -217,24 +217,6 @@ def display_sidebar(gemini_models: List[str], default_max_articles: int):
             index=0,
             key="model_choice_select"
         )
-                
-        # Stratégie de recherche - MÊME STYLE que "Statut des API"
-        st.markdown("**Stratégie de recherche**")
-        
-        search_strategy = st.radio(
-            "Type d'analyse",
-            options=["Automatique", "Mode Verrous"],
-            index=0,
-            help="Automatique : détection intelligente | Mode Verrous : décomposition technique",
-            label_visibility="collapsed"
-        )
-        
-        # Modèle et paramètres
-        model_choice = st.selectbox(
-            "Modèle Gemini",
-            options=gemini_models,
-            index=0
-        )
         
         max_articles = st.slider(
             "Nombre d'articles",
@@ -671,3 +653,73 @@ def _display_api_keys_section():
             st.markdown("<small style='color: #999;'>○ CORE non configurée (optionnel)</small>", unsafe_allow_html=True)
         
         st.caption("[Obtenir les clés optionnelles](https://www.semanticscholar.org/product/api)")
+
+def display_manual_doi_section(semantic_api, enricher, review_generator, ENRICHMENT_TIMEOUT):
+    """
+    Affiche la section permettant d'ajouter manuellement un article par DOI
+    
+    Args:
+        semantic_api: Instance de SemanticScholarAPI
+        enricher: Instance de ArticleEnricher
+        review_generator: Instance de ReviewGenerator
+        ENRICHMENT_TIMEOUT: Timeout pour l'enrichissement
+    """
+    if st.session_state.search_done:
+        st.header("➕ Ajouter un article par DOI")
+        
+        with st.expander("Ajouter un article supplémentaire", expanded=False):
+            st.markdown("""
+            Vous pouvez ajouter des articles supplémentaires à votre sélection en entrant leur DOI.
+            
+            **Où trouver le DOI ?**
+            - Sur la page de l'article (généralement en haut ou en bas)
+            - Format : `10.xxxx/xxxxx` (exemple: `10.1016/j.neuron.2020.01.001`)
+            """)
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                manual_doi = st.text_input(
+                    "DOI de l'article",
+                    placeholder="10.1016/j.example.2024.01.001",
+                    key="manual_doi_input"
+                )
+            with col2:
+                st.markdown("<br>", unsafe_allow_html=True)  # Espacement
+                add_doi_button = st.button("➕ Ajouter", type="secondary", use_container_width=True)
+            
+            if add_doi_button and manual_doi:
+                with st.spinner(f"🔍 Recherche de l'article {manual_doi}..."):
+                    # Nettoyer le DOI
+                    clean_doi = manual_doi.strip().replace("https://doi.org/", "").replace("http://doi.org/", "")
+                    
+                    # Chercher l'article
+                    paper = semantic_api.get_paper_by_doi(clean_doi)
+                    
+                    if paper:
+                        st.success(f"✅ Article trouvé : {paper.get('title', 'Sans titre')}")
+                        
+                        # Enrichir l'article
+                        with st.spinner("🔍 Enrichissement de l'article..."):
+                            enrichment_start = time.time()
+                            paper = enricher.enrich_paper(paper, enrichment_start, ENRICHMENT_TIMEOUT)
+                            
+                            # Générer le résumé
+                            try:
+                                paper['summary'] = review_generator.summarize_paper(paper)
+                            except Exception as e:
+                                st.warning(f"⚠️ Erreur génération résumé: {str(e)}")
+                                paper['summary'] = "Erreur de génération."
+                        
+                        # Marquer comme ajouté manuellement
+                        paper['manually_added'] = True
+                        
+                        # Ajouter à la liste des papers (éviter les doublons)
+                        paper_ids = [p.get('paperId') for p in st.session_state.papers]
+                        if paper.get('paperId') not in paper_ids:
+                            st.session_state.papers.insert(0, paper)  # Ajouter en premier
+                            st.success("✅ Article ajouté à votre sélection !")
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Cet article est déjà dans votre sélection")
+                    else:
+                        st.error("❌ Impossible de trouver cet article. Vérifiez le DOI.")

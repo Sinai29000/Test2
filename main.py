@@ -10,7 +10,7 @@ import warnings
 # Imports configuration
 from config_api import *
 from history_manager import load_search_history, add_to_history
-from authentification import *
+#from authentification import *
 
 # Imports logique métier
 from llm_gemini import LLMProvider
@@ -91,6 +91,7 @@ def main():
     semantic_api = SemanticScholarAPI(api_key=ss_key if ss_key else None)
     
     core_key = st.session_state.get('core_api_key', None)
+    enricher = ArticleEnricher(email="malo.hugd@gmail.com",core_api_key=CORE_API_KEY if CORE_API_KEY != "VOTRE_CLE_CORE_ICI" else None)
     review_generator = ReviewGenerator(llm)
     
     # Zone de saisie
@@ -172,6 +173,14 @@ def main():
             
             st.session_state.papers = papers_sorted
             st.session_state.search_done = True
+
+#demande d'ajout manuel de DOI
+    display_manual_doi_section(
+        semantic_api=semantic_api,
+        enricher=enricher,  # ou enricher, selon votre variable
+        review_generator=review_generator,
+        ENRICHMENT_TIMEOUT=ENRICHMENT_TIMEOUT
+    )
     
     # Affichage des résultats
     if st.session_state.search_done and st.session_state.papers:
